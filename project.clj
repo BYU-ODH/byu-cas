@@ -1,6 +1,6 @@
 (defproject byu-cas "0.1.0-SNAPSHOT"
   :description "BYU CAS authentication layer for Clojure"
-  :url "http://example.com/FIXME"
+  :url "https://github.com/BYU-ODH/byu-cas"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
