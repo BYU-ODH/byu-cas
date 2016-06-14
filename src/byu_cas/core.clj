@@ -22,8 +22,10 @@
   Validator
   (validate [v ticket service] (.validate v ticket service)))
 
-(defn validator-maker [cas-server-fn]
-  (Cas10TicketValidator. (cas-server-fn)))
+;; (defn validator-maker [cas-server-fn]
+;;   (Cas10TicketValidator. (cas-server-fn)))
+(defn validator-maker []
+  (Cas10TicketValidator. BYU-CAS-server))
 
 (defn- valid? [request]
   (or (get-in request [:session const-cas-assertion])
@@ -57,9 +59,9 @@
 (defn ticket [r] (or (get-in r [:query-params artifact-parameter-name])
                      (get-in r [:query-params (keyword artifact-parameter-name)])))
 
-(defn ticket-validation-filter-maker [validator-maker]
+(defn ticket-validation-filter-maker []
   (fn [handler service]
-    (let [ticket-validator (validator-maker BYU-CAS-server)]
+    (let [ticket-validator (validator-maker)]
       (fn [request]
         (if-let [t (ticket request)]
           (try
@@ -83,7 +85,7 @@
 ;;               {:status 403}))
 ;;           (handler request))))))
 
-(def ticket-validation-filter (ticket-validation-filter-maker validator-maker))
+(def ticket-validation-filter (ticket-validation-filter-maker))
 
 (defn user-principal-filter [handler]
   (fn [request]
