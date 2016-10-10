@@ -4,7 +4,11 @@ A Clojure library to simplify connection to BYU CAS for authentication.
 
 ## Usage
 
-[byu-odh/byu-cas "0.0.1-snapshot"]
+[byu-odh/byu-cas "0.1.2"]
+
+
+## Updates
+- 2016.10.10 :: added wrap-remove-cas-code to allow refreshing of pages after code has been provided
 
 ## License
 
