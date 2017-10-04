@@ -132,4 +132,4 @@
   e.g. (-> handler (wrap-cas \"mysite.com\"))"
   ([handler service-string] (wrap-cas handler service-string BYU-CAS-server))
   ([handler service-string server]
-   (wrap-remove-cas-code (cas handler service-string :server server))))
+   (cas handler service-string :server server)))
