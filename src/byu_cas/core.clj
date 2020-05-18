@@ -35,6 +35,7 @@
       (get-in request [:query-params (keyword artifact-parameter-name)])))
 
 (defn authentication-filter
+  "Checks that the request is carrying CAS credentials (but does not validate them)"
   ([handler service no-redirect?]
    (authentication-filter handler service no-redirect? BYU-CAS-server))
   ([handler service no-redirect? cas-server]
@@ -67,9 +68,13 @@
               {:status 403}))
           (handler request))))))
 
-(def ticket-validation-filter (ticket-validation-filter-maker))
+(def ticket-validation-filter
+  "Actually validates the ticket, updates the request and response with the result."
+  (ticket-validation-filter-maker))
 
-(defn user-principal-filter [handler]
+(defn user-principal-filter
+  "Takes username and cas-info from request, and moves them into :username and :cas-info keys in the top level of the request map (rather than being buried in :query-params or :session)."
+  [handler]
   (fn [request]
     (if-let [assertion (or (get-in request [:query-params const-cas-assertion])
                            (get-in request [:query-params (keyword const-cas-assertion)])
