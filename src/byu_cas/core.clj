@@ -1,9 +1,13 @@
 (ns byu-cas.core
-  (:use ring.util.response)
   (:require [clojure.tools.logging :as log]
-            [ring.middleware.params :refer [wrap-params]])
+            [ring.middleware.params :refer [wrap-params]]
+            [ring.util.response :refer [redirect]]
+            [clojure.pprint :as pprint]
+            [clojure.string :refer [join]])
   (:import (org.jasig.cas.client.validation Cas10TicketValidator
                                             TicketValidationException)))
+
+
 
 (def BYU-CAS-server "https://cas.byu.edu/cas")
 
@@ -13,7 +17,7 @@
   #(str s))
 
 (def artifact-parameter-name "ticket")
-(def const-cas-assertion     "_const_cas_assertion_")
+(def const-cas-assertion "_const_cas_assertion_")
 
 (defprotocol Validator
   (validate [v ticket service]))
@@ -87,6 +91,29 @@
                    ))
       (handler request))))
 
+(defn does-to-request [handler f]
+  (fn [request]
+    (handler (f request))))
+
+(defn prints-req [r]
+ (do (pprint/pprint r) r))
+
+(defn construct-url [uri query-params]
+  (let [res (str uri
+                 (when-not (empty? query-params)
+                   (->> query-params
+                        (map (fn [[k v]] (str (name k) "=" (str v))))
+                        (join \&)
+                        (str \?))))]
+    (println "construct-uri:" res)
+    res))
+
+(defn removes-url-token [handler]
+  (fn [{:keys [query-params uri] :as request}]
+    (if (query-params "ticket")
+      (redirect (construct-url uri (dissoc query-params "ticket")))
+      (handler request))))
+
 (defn cas
   "Middleware that requires the user to authenticate with a CAS server.
 
@@ -109,8 +136,12 @@
         user-principal-filter
         (authentication-filter service (:no-redirect? options) (:server options))
         (ticket-validation-filter service)
-        wrap-params)
+        (removes-url-token)
+        #_(does-to-request prints-req)
+        (wrap-params))
       handler)))
+
+
 
 (defn wrap-remove-cas-code [handler]
   (fn [req]
