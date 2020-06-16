@@ -19,7 +19,16 @@
                     :handler (mw-fn http-handler)})))
 
 (defn stop []
-  (http/stop @running-server))
+  (if @running-server
+    (http/stop @running-server)))
+
+;https://my.byu.edu/uPortal/Login
 
 (defn start []
-  (test-with-middleware #(wrap-cas % "humanities.byu.edu")))
+  (test-with-middleware #(wrap-cas % #_"https://my.byu.edu/uPortal/Login"
+                                   
+                                   "humanities.byu.edu/wp-login.php"
+                                   #_"https://forms.byu.edu"
+                                   #_"localhost:3000"
+                                   #_"kmansadventures.proboards.com"
+                                   )))

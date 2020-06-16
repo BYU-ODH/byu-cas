@@ -136,7 +136,7 @@
         user-principal-filter
         (authentication-filter service (:no-redirect? options) (:server options))
         (ticket-validation-filter service)
-        (removes-url-token)
+        #_(removes-url-token)
         #_(does-to-request prints-req)
         (wrap-params))
       handler)))
