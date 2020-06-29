@@ -4,8 +4,14 @@
             [ring.util.response :refer [redirect]]
             [clojure.pprint :as pprint]
             [clojure.string :refer [join] :as s])
-  (:import (org.jasig.cas.client.validation Cas10TicketValidator
+  (:import (org.jasig.cas.client.validation Cas10TicketValidator    
                                             TicketValidationException)))
+
+;Cas10TicketValidator: https://github.com/apereo/java-cas-client/tree/master/cas-client-core/src/main/java/org/jasig/cas/client/validation
+
+
+;Cas10TicketValidator < AbstractCasProtocolUrlBasedTicketValidator  < AbstractUrlBasedTicketValidator implements TicketValidator
+
 
 (def BYU-CAS-server "https://cas.byu.edu/cas")
 
@@ -36,6 +42,14 @@
       (get-in request [:query-params artifact-parameter-name])
       (get-in request [:query-params (keyword artifact-parameter-name)])))
 
+(defn construct-url [uri query-params]
+  (str uri
+       (when-not (empty? query-params)
+         (->> query-params
+              (map (fn [[k v]] (str (name k) "=" (str v))))
+              (join \&)
+              (str \?)))))
+
 (defn authentication-filter
   "Checks that the request is carrying CAS credentials (but does not validate them)"
   ([handler service no-redirect?]
@@ -57,12 +71,13 @@
 (defn ticket [r] (or (get-in r [:query-params artifact-parameter-name])
                      (get-in r [:query-params (keyword artifact-parameter-name)])))
 
+
 (defn ticket-validation-filter [handler service]
   (let [ticket-validator (validator-maker)]
     (fn [{:keys [query-params uri] :as request}]
       (if-let [t (ticket request)]
         (try
-          (let [assertion (validate ticket-validator t service)]
+          (let [assertion (validate ticket-validator t service)]   ;https://github.com/apereo/java-cas-client/blob/08038cb76772dcc70e4a85389ba4b8009a1146e2/cas-client-core/src/main/java/org/jasig/cas/client/validation/AbstractUrlBasedTicketValidator.java#L185n
             (-> (redirect (construct-url uri (dissoc query-params "ticket")))
                 (adds-assertion-to-response assertion)))
           (catch TicketValidationException e
@@ -87,13 +102,27 @@
                             (assoc :cas-info (.getAttributes (.getPrincipal assertion))))))
       (handler request))))
 
-(defn construct-url [uri query-params]
-  (str uri
-       (when-not (empty? query-params)
-         (->> query-params
-              (map (fn [[k v]] (str (name k) "=" (str v))))
-              (join \&)
-              (str \?)))))
+
+(defn is-logged-in? [req]
+   (get-in req [:session const-cas-assertion]))
+
+(defn- logs-out
+  "Modifies a response map so as to end the user session.  Note that this does NOT end the CAS session, so users visiting your application will be redirected to CAS (per authentication-filter), and back to your application, only now authorized.  use with gateway parameter only
+
+
+see ring.middleware.session/bare-session-response if curious how ring sessions work.   https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/middleware/session.clj
+  "
+  [resp]
+  (assoc resp :session nil))
+
+(defn logout-resp
+  "Produces a response map that logs user out of the application (by ending the session) and CAS (by redirecting to the CAS logout endpoint).  Optionally takes a redirect URL which CAS uses to redirect the user (again!) after logout.  Redirect URL should be the *full* URL, including \"https:\""
+  ([]
+   (logs-out
+    (redirect "https://cas.byu.edu/cas/logout")))
+  ([redirect-url]
+   (-> (logout-resp)
+       (update-in [:headers "Location"] (str "?service=" redirect-url)))))
 
 (defn cas
   "Middleware that requires the user to authenticate with a CAS server.
@@ -117,7 +146,15 @@
         user-principal-filter
         (authentication-filter service (:no-redirect? options) (:server options))
         (ticket-validation-filter service)
-        #_(removes-url-token)
+
+        ((fn [handler]
+            (fn [req]
+              (println "req:" )
+              (pprint/pprint req)
+              (let [resp (handler req)]
+                (println "resp:")
+                (pprint/pprint resp)
+                resp))))
         (wrap-params))
       handler)))
 
@@ -144,7 +181,15 @@
 
 (defn wrap-cas
   "ring middleware to wrap with cas; requires a service string in addition to the handler.
-  e.g. (-> handler (wrap-cas \"mysite.com\"))"
+  e.g. (-> handler (wrap-cas \"mysite.com\"))
+  Requires ring.middleware.session/wrap-session, which should be called on the \"outside\" of this, in the sense that when middleware are thread-chained, i.e.
+
+  (-> handler
+    (wrap-cookies)
+    (wrap-fonts)
+    (wrap-css))
+
+  Then requests start at the bottom/outside and move up/inward, while responses start at the top/inside and move down/outward."
   ([handler service-string] (wrap-cas handler service-string BYU-CAS-server))
   ([handler service-string server]
    (cas handler service-string :server server)))
