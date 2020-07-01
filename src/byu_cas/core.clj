@@ -8,8 +8,6 @@
                                             TicketValidationException)))
 
 ;Cas10TicketValidator: https://github.com/apereo/java-cas-client/tree/master/cas-client-core/src/main/java/org/jasig/cas/client/validation
-
-
 ;Cas10TicketValidator < AbstractCasProtocolUrlBasedTicketValidator  < AbstractUrlBasedTicketValidator implements TicketValidator
 
 
@@ -50,34 +48,36 @@
               (join \&)
               (str \?)))))
 
+(defn extract-url [request]
+  (str "http://" (get-in request [:headers "host"])
+       (:uri request)))
+
 (defn authentication-filter
   "Checks that the request is carrying CAS credentials (but does not validate them)"
-  ([handler service no-redirect?]
-   (authentication-filter handler service no-redirect? BYU-CAS-server))
-  ([handler service no-redirect? cas-server]
+  ([handler no-redirect?]
+   (authentication-filter handler  no-redirect? BYU-CAS-server))
+  ([handler no-redirect? cas-server]
    (fn [request]
      (if (valid? request)
        (handler request)
        (if (no-redirect? request)
          {:status 403}
-         (redirect (str cas-server "/login?service=" service)))))))
+         (redirect (str cas-server "/login?service=" (extract-url request))))))))
 
 (defn adds-assertion-to-response [resp assertion]
   (assoc-in resp [:session const-cas-assertion] assertion))
-
-#_(defn adds-assertion-to-request [req assertion]
-  (update-in req [:query-params] assoc const-cas-assertion assertion))
 
 (defn ticket [r] (or (get-in r [:query-params artifact-parameter-name])
                      (get-in r [:query-params (keyword artifact-parameter-name)])))
 
 
-(defn ticket-validation-filter [handler service]
+(defn ticket-validation-filter [handler]
   (let [ticket-validator (validator-maker)]
     (fn [{:keys [query-params uri] :as request}]
       (if-let [t (ticket request)]
         (try
-          (let [assertion (validate ticket-validator t service)]   ;https://github.com/apereo/java-cas-client/blob/08038cb76772dcc70e4a85389ba4b8009a1146e2/cas-client-core/src/main/java/org/jasig/cas/client/validation/AbstractUrlBasedTicketValidator.java#L185n
+          (let [url-str (extract-url request)
+                assertion (validate ticket-validator t url-str )] 
             (-> (redirect (construct-url uri (dissoc query-params "ticket")))
                 (adds-assertion-to-response assertion)))
           (catch TicketValidationException e
@@ -109,9 +109,7 @@
 (defn- logs-out
   "Modifies a response map so as to end the user session.  Note that this does NOT end the CAS session, so users visiting your application will be redirected to CAS (per authentication-filter), and back to your application, only now authorized.  use with gateway parameter only
 
-
-see ring.middleware.session/bare-session-response if curious how ring sessions work.   https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/middleware/session.clj
-  "
+see ring.middleware.session/bare-session-response if curious how ring sessions work.   https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/middleware/session.clj"
   [resp]
   (assoc resp :session nil))
 
@@ -144,8 +142,8 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
     (if (:enabled options)
       (-> handler
         user-principal-filter
-        (authentication-filter service (:no-redirect? options) (:server options))
-        (ticket-validation-filter service)
+        (authentication-filter  (:no-redirect? options) (:server options))
+        (ticket-validation-filter)
 
         ((fn [handler]
             (fn [req]
@@ -157,7 +155,6 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
                 resp))))
         (wrap-params))
       handler)))
-
 
 (defn wrap-remove-cas-code [handler]
   (fn [req]
