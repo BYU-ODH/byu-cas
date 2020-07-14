@@ -9,4 +9,6 @@
                  [ring/ring-defaults "0.3.2"]
                  [ring-middleware-format "0.7.4"]
                  [ring/ring-defaults "0.3.2"]
-                 [metosin/ring-http-response "0.9.1"]])
+                 [metosin/ring-http-response "0.9.1"]
+                 [luminus-jetty "0.1.9"]]
+  :source-paths ["src" "test"])
