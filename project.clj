@@ -13,4 +13,5 @@
                  [luminus-jetty "0.1.9"]]
   :source-paths ["src" "test"]
   :plugins [[lein-codox "0.10.7"]]
-  :codox {:source-paths ["src"]})
+  :codox {:source-paths ["src"]
+          :output-path "docs"})
