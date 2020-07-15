@@ -1,4 +1,4 @@
-(defproject byu-odh/byu-cas "1"
+(defproject byu-odh/byu-cas "2"
   :description "BYU CAS authentication layer for Clojure"
   :url "https://github.com/BYU-ODH/byu-cas"
   :license {:name "Eclipse Public License"
