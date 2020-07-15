@@ -11,4 +11,6 @@
                  [ring/ring-defaults "0.3.2"]
                  [metosin/ring-http-response "0.9.1"]
                  [luminus-jetty "0.1.9"]]
-  :source-paths ["src" "test"])
+  :source-paths ["src" "test"]
+  :plugins [[lein-codox "0.10.7"]]
+  :codox {:source-paths ["src"]})
