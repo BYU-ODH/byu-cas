@@ -2,9 +2,11 @@
 
 A Clojure library to simplify connection to BYU CAS for authentication.
 
+(link to auto-generated docs: https://byu-odh.github.io/byu-cas/)
+
 ## Usage
 
-[byu-odh/byu-cas "0.1.2"]
+[byu-odh/byu-cas "2"]
 
 
 byu-cas is a Clojure library for dealing with BYU's CAS (Central Authentication Service) system.
