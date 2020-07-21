@@ -13,6 +13,8 @@
                  [luminus-jetty "0.1.9"]
                  [tick "0.4.26-alpha"]]
   :source-paths ["src" "test"]
+  :repositories [["releases" {:url "https://repo.clojars.org"
+                              :creds :gpg}]]
   :plugins [[lein-codox "0.10.7"]]
   :codox {:source-paths ["src"]
           :output-path "docs"})
