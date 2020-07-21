@@ -1,14 +1,24 @@
 (ns byu-cas.core
   (:require [clojure.tools.logging :as log]
-            [ring.middleware.params :refer [wrap-params]]
             [ring.util.response :refer [redirect]]
             [clojure.pprint :as pprint]
-            [clojure.string :refer [join] :as s])
+            [clojure.string :refer [join] :as s]
+            [tick.alpha.api :as t])
   (:import (org.jasig.cas.client.validation Cas10TicketValidator    
                                             TicketValidationException)))
 
 ;Cas10TicketValidator: https://github.com/apereo/java-cas-client/tree/master/cas-client-core/src/main/java/org/jasig/cas/client/validation
 ;Cas10TicketValidator < AbstractCasProtocolUrlBasedTicketValidator  < AbstractUrlBasedTicketValidator implements TicketValidator
+
+
+(defn pprints-mw [handler]
+  (fn [req]
+    (println "req:" )
+    (pprint/pprint req)
+    (let [resp (handler req)]
+      (println "resp:")
+      (pprint/pprint resp)
+      resp)))
 
 
 (def BYU-CAS-server "https://cas.byu.edu/cas")
@@ -71,7 +81,7 @@
                      (get-in r [:query-params (keyword artifact-parameter-name)])))
 
 
-(defn ticket-validation-filter [handler]
+(defn ticket-validation-filter [handler success-hook]
   (let [ticket-validator (validator-maker)]
     (fn [{:keys [query-params uri] :as request}]
       (if-let [t (ticket request)]
@@ -79,7 +89,8 @@
           (let [url-str (extract-url request)
                 assertion (validate ticket-validator t url-str )] 
             (-> (redirect (construct-url uri (dissoc query-params "ticket")))
-                (adds-assertion-to-response assertion)))
+                (adds-assertion-to-response assertion)
+                success-hook))
           (catch TicketValidationException e
             (println "failed validation")
             (log/error "Ticket validation exception " e)
@@ -103,7 +114,9 @@
       (handler request))))
 
 
-(defn is-logged-in? [req]
+(defn is-logged-in?
+  "Takes a request and determines whether the requesting user is logged in or not."
+  [req]
    (get-in req [:session const-cas-assertion]))
 
 (defn- logs-out
@@ -122,8 +135,71 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
    (-> (logout-resp)
        (update-in [:headers "Location"] (str "?service=" redirect-url)))))
 
-(defn cas
+
+(defn logout-filter [handler]
+  (fn [req]
+    (if (and (:session req)
+             (or
+              (when-let [logout-time (-> req :session :logout-time)]
+                (t/> (t/now) logout-time))
+              (= "true" (get-in req [:query-params "logout"]))))
+      (logout-resp)
+      (handler req))))
+
+(defn set-timeout
+  "Takes a number of minutes and a response.  Sets a time in :session, after which user will be logged out."
+  [duration resp]
+  (if (= :none duration)
+    resp
+    (assoc-in resp [:session :logout-time]
+              (t/+ (t/now)
+                   (t/new-duration duration :minutes)))))
+
+(defn dependency-string [wrapped]
+  (str "wrap-cas requires wrap-" wrapped " to work.  Please make sure to insert Ring's (wrap-" wrapped ") into your middleware stack, after (wrap-cas), like so:
+
+(-> handler
+    (wrap-cas)
+    (wrap-" wrapped "))
+
+  See https://github.com/ring-clojure/ring/tree/master/ring-core/src/ring/middleware"))
+
+(defn dependency-filter [handler]
+  (fn [req]
+    (cond (not (contains? req :session))
+          (throw (new RuntimeException (dependency-string "session")))
+
+          (not ((every-pred :params :query-params :form-params) req))
+          (throw (new RuntimeException (dependency-string "params")))
+
+          :else
+          (handler req))))
+
+(defn cas [handler & {:as options}]
+  (let [options (merge {:enabled true
+                        :no-redirect? (constantly false)
+                        :server BYU-CAS-server}
+                       options)]
+    (if-not (:enabled options)
+      handler
+      (-> handler
+          user-principal-filter
+          (authentication-filter  (:no-redirect? options) (options :server BYU-CAS-server))
+          (ticket-validation-filter (partial set-timeout (options :timeout 120)))
+          (logout-filter)
+          (dependency-filter)
+          #_(pprints-mw)))))
+
+
+(defn wrap-cas
   "Middleware that requires the user to authenticate with a CAS server.
+  Is dependent on wrap-params and wrap-session; the general call will look something like
+
+  (-> handler
+      (wrap-cas :timeout 120)
+      (wrap-session)
+      (wrap-params))
+
 
   The users's username is added to the request map under the :username key.
 
@@ -133,60 +209,8 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
     :no-redirect? - if this predicate function returns true for a request, a
                     403 Forbidden response will be returned instead of a 302
                     Found redirect
-    :server 	  - the target cas server"
-  [handler service & {:as options}]
-  (let [options (merge {:enabled true
-                        :no-redirect? (constantly false)
-                        :server BYU-CAS-server}
-                       options)]
-    (if (:enabled options)
-      (-> handler
-        user-principal-filter
-        (authentication-filter  (:no-redirect? options) (:server options))
-        (ticket-validation-filter)
-
-        ((fn [handler]
-            (fn [req]
-              (println "req:" )
-              (pprint/pprint req)
-              (let [resp (handler req)]
-                (println "resp:")
-                (pprint/pprint resp)
-                resp))))
-        (wrap-params))
-      handler)))
-
-(defn wrap-remove-cas-code [handler]
-  (fn [req]
-    (let [session-code-path [:session :cas-code]
-          get-url-code (fn [] (get-in req [:params :code]))
-          get-internalized-code (fn [] (get-in req session-code-path))
-          url-code (get-url-code)]
-      (cond
-        ;; (and (get-internalized-code)
-        ;;      (get-url-code))
-        ;; (redirect "http://localhost:3000") ;; TODO strip from the URL
-        ;;
-        (get-internalized-code) 
-        (do 
-          (handler req))
-        ;;
-        url-code
-        (do
-          (handler (assoc-in req session-code-path url-code)))))))
-
-
-(defn wrap-cas
-  "ring middleware to wrap with cas; requires a service string in addition to the handler.
-  e.g. (-> handler (wrap-cas \"mysite.com\"))
-  Requires ring.middleware.session/wrap-session, which should be called on the \"outside\" of this, in the sense that when middleware are thread-chained, i.e.
-
-  (-> handler
-    (wrap-cookies)
-    (wrap-fonts)
-    (wrap-css))
-
-  Then requests start at the bottom/outside and move up/inward, while responses start at the top/inside and move down/outward."
-  ([handler service-string] (wrap-cas handler service-string BYU-CAS-server))
-  ([handler service-string server]
-   (cas handler service-string :server server)))
+    :server 	  - the target cas server
+    :timeout      - takes a number representing the  length (in minutes) of the timeout period.  BYU recommends 120 (two hours), see README
+  "
+  ([& args]
+   (apply cas args)))
