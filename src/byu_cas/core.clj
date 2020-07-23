@@ -129,11 +129,13 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
 (defn logout-resp
   "Produces a response map that logs user out of the application (by ending the session) and CAS (by redirecting to the CAS logout endpoint).  Optionally takes a redirect URL which CAS uses to redirect the user (again!) after logout.  Redirect URL should be the *full* URL, including \"https:\""
   ([]
-   (logs-out
-    (redirect "https://cas.byu.edu/cas/logout")))
+   (logout-resp nil))
   ([redirect-url]
-   (-> (logout-resp)
-       (update-in [:headers "Location"] (str "?service=" redirect-url)))))
+   (let [added-str (if redirect-url
+                     (str "?service=" redirect-url)
+                     "")]
+     (logs-out
+      (redirect (str "https://cas.byu.edu/cas/logout" added-str))))))
 
 
 (defn logout-filter [handler]
@@ -175,20 +177,23 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
           :else
           (handler req))))
 
-(defn cas [handler & {:as options}]
-  (let [options (merge {:enabled true
-                        :no-redirect? (constantly false)
-                        :server BYU-CAS-server}
-                       options)]
-    (if-not (:enabled options)
-      handler
-      (-> handler
-          user-principal-filter
-          (authentication-filter  (:no-redirect? options) (options :server BYU-CAS-server))
-          (ticket-validation-filter (partial set-timeout (options :timeout 120)))
-          (logout-filter)
-          (dependency-filter)
-          #_(pprints-mw)))))
+(defn cas
+  ([handler]
+   (cas handler {}))
+  ([handler options]
+   (let [options (merge {:enabled true
+                         :no-redirect? (constantly false)
+                         :server BYU-CAS-server}
+                        options)]
+     (if-not (:enabled options)
+       handler
+       (-> handler
+           user-principal-filter
+           (authentication-filter  (:no-redirect? options) (options :server BYU-CAS-server))
+           (ticket-validation-filter (partial set-timeout (options :timeout 120)))
+           (logout-filter)
+           (dependency-filter)
+           #_(pprints-mw))))))
 
 
 (defn wrap-cas
