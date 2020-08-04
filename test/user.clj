@@ -1,27 +1,25 @@
-(ns byu-cas.core-test
+(ns user
   (:require [byu-cas.core :refer :all]
             [luminus.http-server :as http]
             [ring.middleware.session :refer [wrap-session]]
+            [clojure.pprint :as pprint]
             [ring.middleware.params  :refer [wrap-params]]))
 
 (def req-holder (atom nil))
 
 (defn http-handler [request]
   (do
-    (println "resetting req-holder...")
-    (reset! req-holder request)
-    (println "new value is: " @req-holder))
+    (do (println "resetting req-holder...")
+        (reset! req-holder request)
+        (println "new value is: " )
+        (pprint/pprint @req-holder)))
   {:status 200
    :headers {"Content-Type" "text/plain"}
    :body (:remote-addr request)})
 
 (defn generate-app []
   (-> http-handler
-      (wrap-cas #_"https://my.byu.edu/uPortal/Login"
-                #_"humanities.byu.edu/wp-login.php"
-                #_"https://forms.byu.edu"
-                "http://localhost:3000"
-                "https://news.ycombinator.com")
+      (wrap-cas {})
       (wrap-session)
       (wrap-params))) 
 
@@ -43,4 +41,5 @@
 
 
 
-;https://my.byu.edu/uPortal/Login
+                                        ;https://my.byu.edu/uPortal/Login
+
