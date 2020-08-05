@@ -45,6 +45,13 @@ BYU's CAS policies, which can be found [here](https://it.byu.edu/nav_to.do?uri=%
 Simply add `logout=true` as a query parameter, i.e. http://myapp.byu.edu/somepage?logout=true, and `wrap-cas` will detect it and redirect the user to the main CAS endpoint (WITHOUT processing the request).
 
 
+## Proxies
+The CAS system relies on redirects (if you check the URL when at the CAS login page, you'll notice a "service" query param that corresponds to your application).  To do this it needs to know what URL to redirect your user to.
+
+If there's no proxy in your setup, don't worry about this.  `byu-cas` will use infer the correct URL from the request.
+
+If you *are* behind a proxy and want to keep the user on the outward-facing domain, you can pass in the `:service` key, which takes either a host-uri string (A host-uri string is just a URL with the query parameters removed, e.g. "http://byu.edu/proxyfront"), or a function of the form `host-uri-string -> host-uri-string`. 
+
 
 ## How CAS works
 CAS can be a little hairy; if you need to do anything out of the ordinatry, the following links should be useful.

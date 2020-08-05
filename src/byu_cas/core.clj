@@ -50,29 +50,45 @@
       (get-in request [:query-params artifact-parameter-name])
       (get-in request [:query-params (keyword artifact-parameter-name)])))
 
-(defn construct-url [uri query-params]
-  (str uri
-       (when-not (empty? query-params)
-         (->> query-params
+(defn add-query-params [url qparams]
+    (str url
+       (when-not (empty? qparams)
+         (->> qparams
               (map (fn [[k v]] (str (name k) "=" (str v))))
               (join \&)
               (str \?)))))
 
-(defn extract-url [request]
-  (str "http://" (get-in request [:headers "host"])
-       (:uri request)))
+
+(defn set-timeout
+  "Takes a number of minutes and a response.  Sets a time in :session, after which user will be logged out."
+  [duration resp]
+  (if (= :none duration)
+    resp
+    (assoc-in resp [:session :logout-time]
+              (t/+ (t/now)
+                   (t/new-duration duration :minutes)))))
+
+
+(defn create-redirect-url [req service remove-ticket?]
+  (let [host (get-in req [:headers "host"]) 
+        {:keys [uri query-params]} req
+        query-params (cond-> query-params remove-ticket? (dissoc "ticket"))
+        without-params (cond-> (str "http://" host uri)
+                         (string? service) ((constantly service))
+                         (fn? service) (service))]
+    (add-query-params without-params query-params)))
+
 
 (defn authentication-filter
   "Checks that the request is carrying CAS credentials (but does not validate them)"
-  ([handler no-redirect?]
-   (authentication-filter handler  no-redirect? BYU-CAS-server))
-  ([handler no-redirect? cas-server]
+  [handler options]
    (fn [request]
      (if (valid? request)
        (handler request)
-       (if (no-redirect? request)
+       (if ((options :no-redirect?) request)
          {:status 403}
-         (redirect (str cas-server "/login?service=" (extract-url request))))))))
+         (redirect (str (options :cas-server BYU-CAS-server) "/login?service="
+                        (create-redirect-url request (:service options) false)))))))
 
 (defn adds-assertion-to-response [resp assertion]
   (assoc-in resp [:session const-cas-assertion] assertion))
@@ -81,16 +97,18 @@
                      (get-in r [:query-params (keyword artifact-parameter-name)])))
 
 
-(defn ticket-validation-filter [handler success-hook]
+(defn ticket-validation-filter
+  [handler options]
   (let [ticket-validator (validator-maker)]
-    (fn [{:keys [query-params uri] :as request}]
+    (fn [request #_{:keys [query-params uri] :as request}]
       (if-let [t (ticket request)]
         (try
-          (let [url-str (extract-url request)
-                assertion (validate ticket-validator t url-str )] 
-            (-> (redirect (construct-url uri (dissoc query-params "ticket")))
+          (let [{:keys [query-params uri]} request
+                redirect-url (create-redirect-url request (options :service) true)
+                assertion (validate ticket-validator t redirect-url)] 
+            (-> (redirect redirect-url)
                 (adds-assertion-to-response assertion)
-                success-hook))
+                ((partial set-timeout (options :timeout 120)))))
           (catch TicketValidationException e
             (println "failed validation")
             (log/error "Ticket validation exception " e)
@@ -148,14 +166,7 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
       (logout-resp)
       (handler req))))
 
-(defn set-timeout
-  "Takes a number of minutes and a response.  Sets a time in :session, after which user will be logged out."
-  [duration resp]
-  (if (= :none duration)
-    resp
-    (assoc-in resp [:session :logout-time]
-              (t/+ (t/now)
-                   (t/new-duration duration :minutes)))))
+
 
 (defn dependency-string [wrapped]
   (str "wrap-cas requires wrap-" wrapped " to work.  Please make sure to insert Ring's (wrap-" wrapped ") into your middleware stack, after (wrap-cas), like so:
@@ -189,8 +200,8 @@ see ring.middleware.session/bare-session-response if curious how ring sessions w
        handler
        (-> handler
            user-principal-filter
-           (authentication-filter  (:no-redirect? options) (options :server BYU-CAS-server))
-           (ticket-validation-filter (partial set-timeout (options :timeout 120)))
+           (authentication-filter options)
+           (ticket-validation-filter options)
            (logout-filter)
            (dependency-filter)
            #_(pprints-mw))))))
