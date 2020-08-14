@@ -1,0 +1,120 @@
+* byu-cas
+  :PROPERTIES:
+  :CUSTOM_ID: byu-cas
+  :END:
+
+A Clojure library to simplify connection to BYU CAS for authentication.
+
+(link to auto-generated docs: https://byu-odh.github.io/byu-cas/)
+
+** Installation
+   :PROPERTIES:
+   :CUSTOM_ID: installation
+   :END:
+
+[byu-odh/byu-cas "4"]
+
+** Usage
+   :PROPERTIES:
+   :CUSTOM_ID: usage
+   :END:
+
+*** Most common case
+    :PROPERTIES:
+    :CUSTOM_ID: most-common-case
+    :END:
+
+Wrap your app in =wrap-cas=, set the timeout to 120 minutes (BYU
+guideline), then wrap that in =wrap-session= and =wrap-params=, which
+=wrap-cas= needs to function correctly.
+
+#+BEGIN_EXAMPLE
+  (defn app []
+   (-> handler
+       (wrap-cas {:timeout 120})
+       (wrap-session)
+       (wrap-params)))
+#+END_EXAMPLE
+
+Note that the user's NetID will be available under =:username= in the
+request map.
+
+** Logging Out
+   :PROPERTIES:
+   :CUSTOM_ID: logging-out
+   :END:
+
+The first thing you need to understand is that any user who logs in with
+your application is logged into /two/ systems---both your app and "BYU
+in general," i.e. the *C*entral *A*uthentication *S*erver.
+
+In the majority of cases, you would rather not think about this and
+would like "log out of our app" to be functionally equivalent to "log
+out of BYU," so we'll treat that case first.
+
+*** What logging out is
+    :PROPERTIES:
+    :CUSTOM_ID: what-logging-out-is
+    :END:
+
+To log a user out of your app and out of CAS, you need to - end the
+session, either by having them delete their session cookie, or by
+removing the session store on your app's server.\\
+- redirect them to the logout endpoint of BYU's CAS system,
+https://cas.byu.edu/cas/logout"
+
+=byu-cas= provides a function, =logout-resp=, which does both---though
+you likely won't need to call it.
+
+*** Easy Logout Setup
+    :PROPERTIES:
+    :CUSTOM_ID: easy-logout-setup
+    :END:
+
+**** Timeout
+     :PROPERTIES:
+     :CUSTOM_ID: timeout
+     :END:
+
+BYU's CAS policies, which can be found
+[[https://it.byu.edu/nav_to.do?uri=%2Fkb_view.do%3Fsys_kb_id%3Deac4e9f90a0a3c0e4b937e7cc6b49811][here]],
+specify a two-hour timeout period (achieved by adding =:timeout 120= to
+the =options= map of =wrap-cas=). If =:timeout= is set, =byu-cas= logs
+the time when a user is authenticated, and after the specified time
+period, logs them out by destroying their session and redirecting their
+next request to CAS's logout endpoint.
+
+**** URL
+     :PROPERTIES:
+     :CUSTOM_ID: url
+     :END:
+
+Simply add =logout=true= as a query parameter,
+i.e. http://myapp.byu.edu/somepage?logout=true, and =wrap-cas= will
+detect it and redirect the user to the main CAS endpoint (WITHOUT
+processing the request).
+
+** How CAS works
+   :PROPERTIES:
+   :CUSTOM_ID: how-cas-works
+   :END:
+
+CAS can be a little hairy; if you need to do anything out of the
+ordinatry, the following links should be useful.
+
+- [[https://apereo.github.io/cas/development/protocol/CAS-Protocol.html][Webflow
+  diagram]]
+- [[https://apereo.github.io/cas/6.2.x/protocol/CAS-Protocol-Specification.html][Protocol
+  Specification]]
+- [[https://apereo.github.io/cas/6.2.x/installation/Logout-Single-Signout.html][On
+  Logging Out]]
+
+** License
+   :PROPERTIES:
+   :CUSTOM_ID: license
+   :END:
+
+Copyright © 2020 BYU Office of Digital Humanities
+
+Distributed under the Eclipse Public License either version 1.0 or (at
+your option) any later version.
