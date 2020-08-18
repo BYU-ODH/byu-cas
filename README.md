@@ -52,6 +52,7 @@ If there's no proxy in your setup, don't worry about this.  `byu-cas` will use i
 
 If you *are* behind a proxy and want to keep the user on the outward-facing domain, you can pass in the `:service` key, which takes either a host-uri string (A host-uri string is just a URL with the query parameters removed, e.g. "http://byu.edu/proxyfront"), or a function of the form `host-uri-string -> host-uri-string`. 
 
+Alternatively, you can pass in the `:host-override` key. This will give `byu-cas` the correct host, while allowing it to preserve the uri from each request.
 
 ## How CAS works
 CAS can be a little hairy; if you need to do anything out of the ordinatry, the following links should be useful.
