@@ -12,7 +12,7 @@ A Clojure library to simplify connection to BYU CAS for authentication.
    :CUSTOM_ID: installation
    :END:
 
-[byu-odh/byu-cas "4"]
+[byu-odh/byu-cas "5"]
 
 ** Usage
    :PROPERTIES:
