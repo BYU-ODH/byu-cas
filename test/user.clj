@@ -19,7 +19,7 @@
 
 (defn generate-app []
   (-> http-handler
-      (wrap-cas {})
+      (wrap-cas {:service identity})
       (wrap-session)
       (wrap-params))) 
 
@@ -27,7 +27,7 @@
   {:handler http-handler
    :port 3000})
 
-(def running-server (atom nil))
+(defonce running-server (atom nil))
 
 (defn stop []
   (if @running-server
